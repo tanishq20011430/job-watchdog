@@ -1,9 +1,9 @@
 name: Job Watchdog - Automated Job Alerts
 
 on:
-  # Run every 6 hours (4 times a day to conserve SerpAPI quota)
+  # Run every 1 hour (24 times a day)
   schedule:
-    - cron: '0 */6 * * *'  # At minute 0 of every 6th hour
+    - cron: '0 * * * *'  # At minute 0 of every hour
   
   # Allow manual trigger
   workflow_dispatch:
