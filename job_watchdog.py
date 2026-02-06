@@ -1316,7 +1316,10 @@ def test_telegram() -> bool:
             if data.get('ok'):
                 print(f"✅ Telegram connected: @{data['result']['username']}")
                 return True
-        print(f"❌ Telegram verification failed")
+            else:
+                print(f"❌ Telegram API error: {data.get('description', 'Unknown error')}")
+        else:
+            print(f"❌ Telegram verification failed (HTTP {response.status_code})")
         return False
     except Exception as e:
         print(f"❌ Telegram error: {e}")
