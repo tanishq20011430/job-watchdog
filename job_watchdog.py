@@ -91,6 +91,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SERPAPI_KEY = os.getenv("SERPAPI_KEY", "85a971523020de8adbb505f043ca26fd3a7e42d14a6f372f8890667dab08fae0")
 SERPAPI_CALLS_FILE = "serpapi_usage.txt"
 SERPAPI_MONTHLY_LIMIT = 250
+SERPAPI_RUN_HOURS = [0, 6, 12, 18]  # Only use SerpAPI at these hours to conserve quota
 
 # ============================================================================
 # JOB SOURCES - Free APIs
@@ -1373,19 +1374,34 @@ def main():
         
         # === India-Focused Sources (fresh jobs) ===
         IndeedIndiaSource(),        # Indeed India - Playwright (fresh!)
-        GoogleJobsSource(),         # Google Jobs via SerpAPI (FRESH - last 24h!)
-        NaukriGoogleSource(),       # Naukri via Google SerpAPI (indexed)
-        
+    ]
+    
+    # Add SerpAPI sources only during designated hours (to conserve 250/month quota)
+    current_hour = datetime.now().hour
+    if current_hour in SERPAPI_RUN_HOURS:
+        sources.extend([
+            GoogleJobsSource(),         # Google Jobs via SerpAPI (FRESH - last 24h!)
+            NaukriGoogleSource(),       # Naukri via Google SerpAPI (indexed)
+        ])
+        serpapi_active = True
+    else:
+        serpapi_active = False
+    
+    # Add remaining sources
+    sources.extend([
         # === Additional Aggregators ===
         LandingJobsSource(),        # EU jobs with relocation
         HNHiringSource(),           # Hacker News monthly hiring
         DuckDuckGoJobSource(),      # Meta-search engine
-    ]
+    ])
     
     # Show SerpAPI usage
     serpapi_usage = get_serpapi_usage()
     print(f"🌐 Fetching from {len(sources)} job sources (priority: fresh jobs)")
-    print(f"📊 SerpAPI usage: {serpapi_usage}/{SERPAPI_MONTHLY_LIMIT} calls this month")
+    if serpapi_active:
+        print(f"📊 SerpAPI: ACTIVE (hour {current_hour}) - {serpapi_usage}/{SERPAPI_MONTHLY_LIMIT} calls used")
+    else:
+        print(f"📊 SerpAPI: SKIPPED (runs at hours {SERPAPI_RUN_HOURS}) - {serpapi_usage}/{SERPAPI_MONTHLY_LIMIT} calls used")
     
     all_jobs = []
     stats = {"scanned": 0, "new": 0, "matches": 0, "alerts": 0, "best": 0}
