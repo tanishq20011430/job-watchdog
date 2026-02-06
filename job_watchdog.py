@@ -91,7 +91,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SERPAPI_KEY = os.getenv("SERPAPI_KEY", "85a971523020de8adbb505f043ca26fd3a7e42d14a6f372f8890667dab08fae0")
 SERPAPI_CALLS_FILE = "serpapi_usage.txt"
 SERPAPI_MONTHLY_LIMIT = 250
-SERPAPI_RUN_HOURS = [0, 6, 12, 18]  # Only use SerpAPI at these hours to conserve quota
+SERPAPI_RUN_HOURS = [8, 20]  # Only use SerpAPI at 8 AM and 8 PM to conserve quota (2x/day)
 
 # ============================================================================
 # JOB SOURCES - Free APIs
