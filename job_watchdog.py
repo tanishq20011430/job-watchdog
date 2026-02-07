@@ -71,7 +71,7 @@ SEARCH_CONFIGS = [
 MIN_MATCH_SCORE = 15
 
 # Maximum job age in hours (jobs older than this are filtered out)
-MAX_JOB_AGE_HOURS = 6
+MAX_JOB_AGE_HOURS = 12
 
 # Files
 CSV_FILE = "notified_jobs.csv"
@@ -95,7 +95,7 @@ def rate_limit(seconds: float = 1.0):
     time.sleep(seconds)
 
 
-def parse_job_age_hours(posted: str) -> float:
+def parse_job_age_hours(posted) -> float:
     """
     Parse job posting time and return age in hours.
     Returns float('inf') if unable to parse (will be filtered out).
@@ -103,7 +103,23 @@ def parse_job_age_hours(posted: str) -> float:
     if not posted:
         return float('inf')  # Unknown age, filter out
     
-    posted_lower = posted.lower().strip()
+    now = datetime.now()
+    
+    # Handle Unix timestamp (integer like 1770418892)
+    if isinstance(posted, (int, float)):
+        try:
+            posted_dt = datetime.fromtimestamp(posted)
+            age_hours = (now - posted_dt).total_seconds() / 3600
+            return max(0, age_hours)
+        except:
+            return float('inf')
+    
+    # Convert to string
+    posted = str(posted).strip()
+    if not posted:
+        return float('inf')
+    
+    posted_lower = posted.lower()
     
     # Handle "just now", "just posted", etc.
     if any(x in posted_lower for x in ['just', 'now', 'moment', 'second']):
@@ -127,14 +143,14 @@ def parse_job_age_hours(posted: str) -> float:
     
     # Handle "today" (check before "day")
     if 'today' in posted_lower:
-        return 12  # Assume posted earlier today
+        return 3  # Assume posted a few hours ago
     
     # Handle "yesterday" (check before "day")
     if 'yesterday' in posted_lower:
-        return 36  # ~1.5 days old
+        return 30  # ~1.25 days old
     
     # Handle "X days ago"
-    if 'day' in posted_lower:
+    if 'day' in posted_lower and 'ago' in posted_lower:
         try:
             days = int(''.join(filter(str.isdigit, posted_lower.split('day')[0])) or '0')
             return days * 24
@@ -143,36 +159,54 @@ def parse_job_age_hours(posted: str) -> float:
     
     # Handle "X weeks ago"
     if 'week' in posted_lower:
-        try:
-            weeks = int(''.join(filter(str.isdigit, posted_lower.split('week')[0])) or '0')
-            return weeks * 24 * 7
-        except:
-            return float('inf')
+        return float('inf')  # Too old
     
     # Handle "X months ago"
     if 'month' in posted_lower:
         return float('inf')  # Too old
     
-    # Handle ISO date formats (2026-02-07T10:30:00)
-    try:
-        if 'T' in posted or '-' in posted:
-            # Try ISO format
-            for fmt in ['%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%d']:
-                try:
-                    posted_dt = datetime.strptime(posted[:len(fmt.replace('%', '').replace('Y', 'XX').replace('m', 'X').replace('d', 'X').replace('H', 'X').replace('M', 'X').replace('S', 'X').replace('T', 'T').replace('Z', 'Z'))], fmt)
-                    age_hours = (datetime.now() - posted_dt).total_seconds() / 3600
-                    return max(0, age_hours)
-                except:
-                    continue
-    except:
-        pass
+    # Handle ISO date formats with timezone (2026-02-06T00:00:35+00:00)
+    if 'T' in posted and ('+' in posted or 'Z' in posted):
+        try:
+            # Strip timezone and parse
+            date_part = posted.split('+')[0].split('Z')[0]
+            if '.' in date_part:
+                date_part = date_part.split('.')[0]  # Remove microseconds
+            posted_dt = datetime.strptime(date_part, '%Y-%m-%dT%H:%M:%S')
+            age_hours = (now - posted_dt).total_seconds() / 3600
+            return max(0, age_hours)
+        except:
+            pass
+    
+    # Handle simple ISO date (2026-02-06T10:30:00 or 2026-02-06)
+    if '-' in posted:
+        try:
+            if 'T' in posted:
+                date_part = posted.split('T')[0]
+            else:
+                date_part = posted[:10]
+            posted_dt = datetime.strptime(date_part, '%Y-%m-%d')
+            # Add 12 hours as estimate (posted sometime during that day)
+            age_hours = (now - posted_dt).total_seconds() / 3600 - 12
+            return max(0, age_hours)
+        except:
+            pass
+    
+    # Handle Unix timestamp as string
+    if posted.isdigit() and len(posted) >= 10:
+        try:
+            posted_dt = datetime.fromtimestamp(int(posted))
+            age_hours = (now - posted_dt).total_seconds() / 3600
+            return max(0, age_hours)
+        except:
+            pass
     
     # Handle "Recent" or similar
     if 'recent' in posted_lower:
-        return 12  # Assume somewhat recent
+        return 3  # Assume recent
     
-    # Unknown format - be conservative and filter out
-    return float('inf')
+    # Unknown format - default to fresh (to not filter out valid jobs)
+    return 3  # Be lenient - assume fresh if unknown
 
 
 def is_job_fresh(job: Dict, max_hours: float = MAX_JOB_AGE_HOURS) -> bool:
