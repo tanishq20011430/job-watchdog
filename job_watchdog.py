@@ -39,6 +39,8 @@ import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from dotenv import load_dotenv
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module='sklearn')
 
 # Load .env file
 load_dotenv()
@@ -49,23 +51,11 @@ load_dotenv()
 
 # Your resume profiles for matching
 DS_PROFILE = """
-Tanishq Soni - Data Scientist. Master's in MCA (AI/ML). 
-2 years experience in ML-powered solutions and data engineering.
-Expertise: NLP (BERT), Time Series (ARIMA), XGBoost, PyTorch, Keras, TensorFlow.
-Cloud: AWS (Glue, S3, Lambda, EC2), Airflow, ETL Pipelines.
-Skills: Machine Learning, Deep Learning, Python, SQL, Statistics, Data Mining.
-Exp: Built demand forecasting pipelines (25% error reduction).
-Projects: Hybrid Recommender System for 10k+ users.
+Data Science, Machine Learning, Supervised Learning, Unsupervised Learning, Regression, Classification, Clustering, Time Series Forecasting, NLP, Natural Language Processing, Feature Engineering, Model Training, Model Evaluation, Hyperparameter Tuning, Cross Validation, Scikit-learn, PyTorch, Keras, Python, Pandas, NumPy, SQL, R, Exploratory Data Analysis, EDA, Statistical Analysis, Hypothesis Testing, A/B Testing, Probability, Linear Regression, Logistic Regression, Random Forest, Gradient Boosting, XGBoost, Model Deployment, ML Pipelines, ETL Pipelines, Data Engineering, Data Validation, Data Automation, Airflow, APIs, Data Integration, Power BI, Data Visualization, Matplotlib, Seaborn, Dashboards, Business Insights, Decision Support, PostgreSQL, SQL Server, Cloud Computing, AWS, AWS Glue, S3, Lambda, EC2, Git, Version Control, Jupyter Notebook, Prompt Engineering, Generative AI, GenAI, LangChain, LLMs, Fine-tuning, Recommendation Systems, Collaborative Filtering, Fraud Analytics, Predictive Modeling, Demand Forecasting, KPI Analysis, Stakeholder Communication
 """
 
 DA_PROFILE = """
-Tanishq Soni - Data Analyst. 2+ years experience in Power BI, SQL, and Python.
-Expertise: Advanced DAX (45+ measures), Power Query, 60-page reports.
-Tools: SQL Server, PostgreSQL, MySQL, Tableau, Excel, Power BI.
-Skills: Data Visualization, Business Intelligence, ETL, Data Warehousing.
-Experience: Managed 2M+ records, reduced manual effort by 70%.
-Projects: Enterprise Booking Analytics Suite, SQL execution tool for 25+ members.
-"""
+SQL, Advanced SQL, Joins, Subqueries, Window Functions, CTEs, Python, Pandas, NumPy, Data Cleaning, Data Wrangling, Data Transformation, Data Validation, Handling Missing Values, Outlier Detection, Relational Databases, MySQL, PostgreSQL, SQL Server, Exploratory Data Analysis, EDA, Descriptive Statistics, Inferential Statistics, Hypothesis Testing, A/B Testing, Correlation Analysis, Regression Analysis, KPI Definition, Metric Design, Power BI, Tableau, Excel, Advanced Excel, Pivot Tables, Power Query, DAX, Dashboards, Data Visualization, Data Storytelling, Business Requirements Gathering, Stakeholder Management, Cross-functional Collaboration, Business Insights, Trend Analysis, Root Cause Analysis, Performance Analysis, Operational Analytics, ETL, ELT, Data Pipelines, Data Integration, APIs, Automation, Scheduling, Azure Data Factory, ADF, AWS, Azure, GCP, Git, Version Control, Agile, Jira, Documentation, Analytical Thinking, Problem Solving, Data-Driven Decision Making, Communication of Insights, Executive Reporting"""
 
 # Search configurations - each will be searched across all sources
 SEARCH_CONFIGS = [
@@ -79,6 +69,9 @@ SEARCH_CONFIGS = [
 
 # Minimum match score to send notification (0-100)
 MIN_MATCH_SCORE = 15
+
+# Maximum job age in hours (jobs older than this are filtered out)
+MAX_JOB_AGE_HOURS = 12
 
 # Files
 CSV_FILE = "notified_jobs.csv"
@@ -100,6 +93,127 @@ SERPAPI_RUN_HOURS = [8, 20]  # Only use SerpAPI at 8 AM and 8 PM to conserve quo
 def rate_limit(seconds: float = 1.0):
     """Rate limiting between API calls to avoid being blocked"""
     time.sleep(seconds)
+
+
+def parse_job_age_hours(posted) -> float:
+    """
+    Parse job posting time and return age in hours.
+    Returns float('inf') if unable to parse (will be filtered out).
+    """
+    if not posted:
+        return float('inf')  # Unknown age, filter out
+    
+    now = datetime.now()
+    
+    # Handle Unix timestamp (integer like 1770418892)
+    if isinstance(posted, (int, float)):
+        try:
+            posted_dt = datetime.fromtimestamp(posted)
+            age_hours = (now - posted_dt).total_seconds() / 3600
+            return max(0, age_hours)
+        except:
+            return float('inf')
+    
+    # Convert to string
+    posted = str(posted).strip()
+    if not posted:
+        return float('inf')
+    
+    posted_lower = posted.lower()
+    
+    # Handle "just now", "just posted", etc.
+    if any(x in posted_lower for x in ['just', 'now', 'moment', 'second']):
+        return 0
+    
+    # Handle "X minutes ago"
+    if 'minute' in posted_lower:
+        try:
+            mins = int(''.join(filter(str.isdigit, posted_lower.split('minute')[0])) or '0')
+            return mins / 60
+        except:
+            return 1  # Assume recent
+    
+    # Handle "X hours ago" or "X hour ago"
+    if 'hour' in posted_lower:
+        try:
+            hours = int(''.join(filter(str.isdigit, posted_lower.split('hour')[0])) or '0')
+            return hours
+        except:
+            return 5  # Assume within range
+    
+    # Handle "today" (check before "day")
+    if 'today' in posted_lower:
+        return 3  # Assume posted a few hours ago
+    
+    # Handle "yesterday" (check before "day")
+    if 'yesterday' in posted_lower:
+        return 30  # ~1.25 days old
+    
+    # Handle "X days ago"
+    if 'day' in posted_lower and 'ago' in posted_lower:
+        try:
+            days = int(''.join(filter(str.isdigit, posted_lower.split('day')[0])) or '0')
+            return days * 24
+        except:
+            return float('inf')
+    
+    # Handle "X weeks ago"
+    if 'week' in posted_lower:
+        return float('inf')  # Too old
+    
+    # Handle "X months ago"
+    if 'month' in posted_lower:
+        return float('inf')  # Too old
+    
+    # Handle ISO date formats with timezone (2026-02-06T00:00:35+00:00)
+    if 'T' in posted and ('+' in posted or 'Z' in posted):
+        try:
+            # Strip timezone and parse
+            date_part = posted.split('+')[0].split('Z')[0]
+            if '.' in date_part:
+                date_part = date_part.split('.')[0]  # Remove microseconds
+            posted_dt = datetime.strptime(date_part, '%Y-%m-%dT%H:%M:%S')
+            age_hours = (now - posted_dt).total_seconds() / 3600
+            return max(0, age_hours)
+        except:
+            pass
+    
+    # Handle simple ISO date (2026-02-06T10:30:00 or 2026-02-06)
+    if '-' in posted:
+        try:
+            if 'T' in posted:
+                date_part = posted.split('T')[0]
+            else:
+                date_part = posted[:10]
+            posted_dt = datetime.strptime(date_part, '%Y-%m-%d')
+            # Add 12 hours as estimate (posted sometime during that day)
+            age_hours = (now - posted_dt).total_seconds() / 3600 - 12
+            return max(0, age_hours)
+        except:
+            pass
+    
+    # Handle Unix timestamp as string
+    if posted.isdigit() and len(posted) >= 10:
+        try:
+            posted_dt = datetime.fromtimestamp(int(posted))
+            age_hours = (now - posted_dt).total_seconds() / 3600
+            return max(0, age_hours)
+        except:
+            pass
+    
+    # Handle "Recent" or similar
+    if 'recent' in posted_lower:
+        return 3  # Assume recent
+    
+    # Unknown format - default to fresh (to not filter out valid jobs)
+    return 3  # Be lenient - assume fresh if unknown
+
+
+def is_job_fresh(job: Dict, max_hours: float = MAX_JOB_AGE_HOURS) -> bool:
+    """Check if job is within the freshness threshold"""
+    posted = job.get('posted', '')
+    age_hours = parse_job_age_hours(posted)
+    return age_hours <= max_hours
 
 
 def get_serpapi_usage() -> int:
@@ -873,12 +987,12 @@ class IndeedIndiaSource:
                                     title_el = await card.query_selector("h2.jobTitle a, .jobTitle a, h2 a")
                                     company_el = await card.query_selector("[data-testid='company-name'], .companyName")
                                     location_el = await card.query_selector("[data-testid='text-location'], .companyLocation")
-                                    date_el = await card.query_selector(".date, [data-testid='myJobsStateDate']")
+                                    date_el = await card.query_selector(".date, .result-footer, [data-testid='myJobsStateDate'], .new, .job-snippet-footer")
                                     
                                     title = await title_el.inner_text() if title_el else "Unknown"
                                     company = await company_el.inner_text() if company_el else "Unknown"
                                     loc = await location_el.inner_text() if location_el else "India"
-                                    posted = await date_el.inner_text() if date_el else ""
+                                    posted = await date_el.inner_text() if date_el else "today"  # Default to today since fromage=3
                                     
                                     href = await title_el.get_attribute("href") if title_el else ""
                                     url = f"https://in.indeed.com{href}" if href and not href.startswith("http") else href
@@ -1430,9 +1544,15 @@ def main():
     print(f"\n{'─' * 60}")
     print(f"📊 Processing {len(all_jobs)} total jobs...")
     
-    new_matches = []
+    # Apply freshness filter
+    fresh_jobs = [job for job in all_jobs if is_job_fresh(job)]
+    filtered_count = len(all_jobs) - len(fresh_jobs)
+    print(f"   Fresh jobs (≤{MAX_JOB_AGE_HOURS}h): {len(fresh_jobs)} (filtered out: {filtered_count})")
     
-    for job in all_jobs:
+    new_matches = []
+    stats['filtered'] = filtered_count
+    
+    for job in fresh_jobs:
         job_id = generate_job_id(job)
         
         if job_id in history:
@@ -1496,6 +1616,7 @@ def main():
     print("🏁 SCAN COMPLETE")
     print(f"{'=' * 70}")
     print(f"   Total jobs fetched: {len(all_jobs)}")
+    print(f"   Fresh jobs (≤{MAX_JOB_AGE_HOURS}h): {len(all_jobs) - stats.get('filtered', 0)}")
     print(f"   New jobs found: {stats['new']}")
     print(f"   Matches sent: {stats['alerts']}")
     print(f"   Best match: {stats['best']}%")
@@ -1504,9 +1625,11 @@ def main():
     
     # Send summary to Telegram
     if telegram_ok and stats['new'] > 0:
+        fresh_count = len(all_jobs) - stats.get('filtered', 0)
         summary = (
             f"🤖 <b>Job Scan Complete</b>\n\n"
             f"📊 Fetched: {len(all_jobs)} jobs\n"
+            f"⏱️ Fresh (≤{MAX_JOB_AGE_HOURS}h): {fresh_count}\n"
             f"🆕 New: {stats['new']}\n"
             f"📬 Alerts: {stats['alerts']}\n"
             f"🏆 Best: {stats['best']}%"
