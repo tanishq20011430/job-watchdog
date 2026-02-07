@@ -987,12 +987,12 @@ class IndeedIndiaSource:
                                     title_el = await card.query_selector("h2.jobTitle a, .jobTitle a, h2 a")
                                     company_el = await card.query_selector("[data-testid='company-name'], .companyName")
                                     location_el = await card.query_selector("[data-testid='text-location'], .companyLocation")
-                                    date_el = await card.query_selector(".date, [data-testid='myJobsStateDate']")
+                                    date_el = await card.query_selector(".date, .result-footer, [data-testid='myJobsStateDate'], .new, .job-snippet-footer")
                                     
                                     title = await title_el.inner_text() if title_el else "Unknown"
                                     company = await company_el.inner_text() if company_el else "Unknown"
                                     loc = await location_el.inner_text() if location_el else "India"
-                                    posted = await date_el.inner_text() if date_el else ""
+                                    posted = await date_el.inner_text() if date_el else "today"  # Default to today since fromage=3
                                     
                                     href = await title_el.get_attribute("href") if title_el else ""
                                     url = f"https://in.indeed.com{href}" if href and not href.startswith("http") else href
