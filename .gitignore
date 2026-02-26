@@ -42,3 +42,6 @@ serpapi_usage.txt
 # OS
 .DS_Store
 Thumbs.db
+
+# Database
+data/

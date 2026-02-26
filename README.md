@@ -1,133 +1,227 @@
-# 🤖 Job Watchdog - Automated Job Alert System
+# 🐕 Job Watchdog v2.0
 
-Get instant Telegram notifications for fresh job postings matching your profile!
+**Intelligent Multi-Source Job Alert System for India**
 
-## Features
+A complete redesign with semantic matching, LLM filtering, and async architecture for accurate, relevant job alerts.
 
-- 🔍 **14 Job Sources** - Indeed, Google Jobs, Naukri, RemoteOK, and more
-- ⚡ **Fresh Jobs Priority** - Focuses on jobs posted within last 24-72 hours
-- 🎯 **Smart Matching** - Hybrid keyword + TF-IDF scoring system
-- 📱 **Telegram Alerts** - Instant notifications with job details
-- ⏰ **Automated** - Runs every 6 hours via GitHub Actions
-- 📊 **API Quota Management** - Tracks SerpAPI usage (250/month limit)
+## ✨ What's New in v2.0
 
-## Job Sources
+| Feature | v1.0 | v2.0 |
+|---------|------|------|
+| Architecture | Single file, synchronous | Modular, async |
+| Matching | TF-IDF + Keywords | Sentence Embeddings (Semantic) |
+| Filtering | None | LLM-powered experience filter |
+| Database | CSV file | SQLite with state tracking |
+| Location | All regions | India-focused with city detection |
+| Relevance | Low (sales jobs leaked through) | High (strict filtering) |
 
-| Source | Type | Freshness |
-|--------|------|-----------|
-| Google Jobs (SerpAPI) | API | Last 24 hours |
-| Naukri via Google | Indexed | Recent |
-| Indeed India | Playwright | Last 3 days |
-| RemoteOK | API | Daily |
-| Arbeitnow | API | Daily |
-| Findwork | API | Daily |
-| Himalayas | API | Daily |
-| Jobicy | API | Daily |
-| TheMuse | API | Various |
-| WeWorkRemotely | RSS | Daily |
-| LandingJobs | API | Recent |
-| HN Hiring | API | Monthly |
-| DuckDuckGo | Search | Various |
+## 🎯 Key Features
 
-## Setup
+- **🧠 Semantic Matching** - Uses sentence-transformers (all-MiniLM-L6-v2) to understand job descriptions, not just keywords
+- **🤖 LLM Experience Filtering** - Uses Groq (free) or Ollama to filter out senior roles requiring 5+ years
+- **🇮🇳 India-Focused** - Strict location filtering for Pune, Mumbai, Bangalore, Hyderabad, Delhi NCR
+- **⚡ Async Architecture** - Fetches from all sources concurrently for 3x faster scans
+- **📊 SQLite Database** - Track job status (Detected → Notified → Applied) with full history
+- **🔍 Multi-Source** - 12+ job sources including Naukri, LinkedIn, Indeed, and global remotes
 
-### 1. Create Telegram Bot
+## 📦 Project Structure
 
-1. Message [@BotFather](https://t.me/BotFather) on Telegram
-2. Send `/newbot` and follow instructions
-3. Copy your **Bot Token**
-4. Send a message to your bot to activate it
-5. Get your **Chat ID** from: `https://api.telegram.org/bot<TOKEN>/getUpdates`
+```
+job-watchdog/
+├── run.py              # Entry point
+├── requirements.txt
+├── .env.example        # Configuration template
+├── data/               # Database & logs
+│   ├── jobs.db
+│   └── watchdog.log
+└── src/
+    ├── config/         # Settings & environment
+    ├── database/       # Pydantic models & SQLite
+    ├── sources/        # Job source implementations
+    │   ├── base.py     # Global sources (RemoteOK, etc.)
+    │   └── india.py    # India sources (Naukri, LinkedIn, etc.)
+    ├── matching/       # Semantic matching engine
+    ├── filters/        # LLM experience filtering
+    ├── utils/          # Notifications & helpers
+    └── orchestrator.py # Main workflow
+```
 
-### 2. Get SerpAPI Key (Optional)
+## 🚀 Quick Start
 
-1. Sign up at [SerpAPI](https://serpapi.com/)
-2. Get your API key (100 free searches/month)
-
-### 3. Local Setup
+### 1. Install Dependencies
 
 ```bash
-# Clone repository
-git clone https://github.com/YOUR_USERNAME/job-watchdog.git
 cd job-watchdog
-
-# Install dependencies
 pip install -r requirements.txt
 
-# Install Playwright browsers
-playwright install chromium
-
-# Create .env file
-cat > .env << EOF
-TELEGRAM_TOKEN=your_telegram_bot_token
-TELEGRAM_CHAT_ID=your_chat_id
-SERPAPI_KEY=your_serpapi_key
-EOF
-
-# Run
-python job_watchdog.py
+# Download the embedding model (first run)
+python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
 ```
 
-### 4. GitHub Actions Setup (Automated)
+### 2. Configure Environment
 
-1. Fork this repository
-2. Go to **Settings → Secrets and variables → Actions**
-3. Add these secrets:
-   - `TELEGRAM_TOKEN` - Your Telegram bot token
-   - `TELEGRAM_CHAT_ID` - Your Telegram chat ID
-   - `SERPAPI_KEY` - Your SerpAPI key
-
-The workflow runs automatically every 6 hours, or trigger manually from the **Actions** tab.
-
-## Configuration
-
-Edit `job_watchdog.py` to customize:
-
-```python
-# Your resume profiles
-DS_PROFILE = """
-Your Data Scientist profile here...
-"""
-
-DA_PROFILE = """
-Your Data Analyst profile here...
-"""
-
-# Search configurations
-SEARCH_CONFIGS = [
-    {"keywords": ["data scientist", "machine learning"], "profile": DS_PROFILE, "tag": "Data Science"},
-    {"keywords": ["data analyst", "business analyst"], "profile": DA_PROFILE, "tag": "Data Analytics"},
-]
-
-# Minimum match score (0-100)
-MIN_MATCH_SCORE = 15
+```bash
+cp .env.example .env
+# Edit .env with your credentials
 ```
 
-## API Usage
+Required settings:
+- `TELEGRAM_TOKEN` - From @BotFather
+- `TELEGRAM_CHAT_ID` - Your chat ID
 
-- **SerpAPI**: 250 calls/month (tracked automatically)
-- Each run uses ~2 API calls
-- That's ~125 runs/month or ~4 runs/day
+Optional but recommended:
+- `GROQ_API_KEY` - Free from https://console.groq.com/keys (for LLM filtering)
+- `SERPAPI_KEY` - For Google Jobs (250 free/month)
 
-## Notifications
+### 3. Run
 
-You'll receive Telegram messages like:
-
-```
-🎯 New Job Match! (Score: 35.2%)
-
-📌 Senior Data Scientist
-🏢 Amazon
-📍 Bangalore, India
-🕐 Posted: 2 hours ago
-
-🔗 Apply: https://...
+```bash
+python run.py
 ```
 
-## License
+## 🔧 Configuration
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TELEGRAM_TOKEN` | Yes | Your Telegram bot token |
+| `TELEGRAM_CHAT_ID` | Yes | Your Telegram chat ID |
+| `GROQ_API_KEY` | No | Groq API key for LLM filtering (free tier) |
+| `SERPAPI_KEY` | No | SerpAPI key for Google Jobs |
+| `LOG_LEVEL` | No | DEBUG, INFO, WARNING, ERROR (default: INFO) |
+
+### Customizing Search Profiles
+
+Edit `src/config/settings.py` to modify:
+- Target locations
+- Excluded job titles (sales, HR, etc.)
+- Resume/profile keywords
+- Minimum match scores
+
+## 📊 How It Works
+
+```
+┌─────────────────┐
+│  PHASE 1: Fetch │  Async fetch from 12+ sources
+└────────┬────────┘
+         ▼
+┌─────────────────┐
+│  PHASE 2: Dedup │  Remove known jobs (SQLite)
+└────────┬────────┘
+         ▼
+┌─────────────────┐
+│  PHASE 3: Match │  Semantic similarity scoring
+└────────┬────────┘
+         ▼
+┌─────────────────┐
+│  PHASE 4: Filter│  Location + Title + Experience
+└────────┬────────┘
+         ▼
+┌─────────────────┐
+│  PHASE 5: LLM   │  Extract experience, filter seniors
+└────────┬────────┘
+         ▼
+┌─────────────────┐
+│  PHASE 6: Save  │  Persist to SQLite
+└────────┬────────┘
+         ▼
+┌─────────────────┐
+│  PHASE 7: Alert │  Send to Telegram
+└─────────────────┘
+```
+
+## 🛡️ Filtering Layers
+
+### Layer 1: Location Filter
+- ✅ India cities (Pune, Mumbai, Bangalore, etc.)
+- ✅ Remote jobs (no location restriction)
+- ❌ USA, UK, Europe, etc.
+
+### Layer 2: Title Filter
+- ✅ Data Scientist, Data Analyst, ML Engineer, BI Developer
+- ❌ Sales, HR, Marketing, Customer Success, etc.
+
+### Layer 3: Semantic Filter
+- Uses sentence embeddings to compare job description vs your profile
+- Threshold: 35% similarity (configurable)
+
+### Layer 4: Experience Filter (Quick)
+- Regex patterns to detect "Senior", "5+ years", etc.
+
+### Layer 5: LLM Filter (Optional)
+- Sends job to Groq/Ollama to extract exact experience requirements
+- Filters out roles requiring > 3 years (configurable)
+
+## 📱 Telegram Notifications
+
+Jobs are sent with:
+- Match score (%)
+- Job category (DS/DA/ML/BI)
+- Company name
+- Location (with city)
+- Direct apply link
+
+## 🔄 Automation
+
+### GitHub Actions (Recommended)
+
+Create `.github/workflows/scan.yml`:
+
+```yaml
+name: Job Scan
+on:
+  schedule:
+    - cron: '0 2,8,14,20 * * *'  # Every 6 hours
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: python run.py
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+```
+
+### Cron (Local)
+
+```bash
+# Add to crontab -e
+0 8,14,20 * * * cd /path/to/job-watchdog && python run.py >> logs/cron.log 2>&1
+```
+
+## 🐛 Troubleshooting
+
+### "sentence-transformers not installed"
+```bash
+pip install sentence-transformers
+```
+
+### "Telegram not working"
+1. Make sure you've started a chat with your bot
+2. Verify token and chat_id in .env
+3. Check: `https://api.telegram.org/bot<TOKEN>/getUpdates`
+
+### "No jobs found"
+- Check your internet connection
+- Some sources may be rate-limited
+- Run with `LOG_LEVEL=DEBUG` for details
+
+## 📈 Future Improvements
+
+- [ ] Add more India sources (AngelList, Wellfound)
+- [ ] Company career page scrapers (NVIDIA, Mastercard)
+- [ ] Job application tracking UI
+- [ ] Auto-apply integration
+
+## 📜 License
 
 MIT License
-
-## Author
-
-Built with ❤️ for job seekers

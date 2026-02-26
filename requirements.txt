@@ -1,9 +1,44 @@
-playwright>=1.40.0
-playwright-stealth>=2.0.1
-pandas>=1.5.0
-scikit-learn>=1.0.0
-requests>=2.28.0
+# Job Watchdog v2.0 - Requirements
+# ================================
+
+# Core async HTTP
+httpx>=0.25.0
+aiohttp>=3.9.0
+
+# Data validation
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
+
+# Database
+# SQLite is built-in, no extra deps needed
+
+# Semantic Matching (Phase 2)
+sentence-transformers>=2.2.0
+numpy>=1.24.0
+# torch - will be installed with sentence-transformers
+
+# LLM Filtering (Phase 3) - Optional
+# Groq API: Free tier with llama-3.1-8b-instant
+# No extra deps needed (uses httpx)
+
+# Data processing
+pandas>=2.0.0
+
+# Browser automation for Indeed/LinkedIn (Optional)
+playwright>=1.40.0
+playwright-stealth>=1.0.0
+
+# SerpAPI for Google Jobs (Optional)
 google-search-results>=2.4.2
-urllib3>=1.26.18
-certifi>=2023.11.17
+
+# Backwards compatibility
+requests>=2.28.0
+scikit-learn>=1.0.0
+
+# Logging
+colorlog>=6.7.0
+
+# Development (optional)
+# pytest>=7.0.0
+# pytest-asyncio>=0.21.0
